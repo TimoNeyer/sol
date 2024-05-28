@@ -67,7 +67,7 @@ Compositor`. As described above, it is necessary to define an `entry` function,
 we can review the definition of a function now.
 
 ```
-myFunction(*args){
+fn myFunction(*args){
     // body;
     return 0;
 }
@@ -84,7 +84,7 @@ state Main : Start {
         print("ehlo");
         myTransition();
     }
-    => myTransition(Main -> Print){ }
+    <- myTransition(Main -> Print){ }
 }
 
 state Print {
@@ -98,7 +98,7 @@ state Print {
 $ ehlo
 $ world
 ```
-Using `=>` to mark them as transitions.
+Using `<-` to mark them as transitions.
 
 In this case `myTransition` has no content, so the context is just changed to
 `Print`. However, you may specify arguments in the transition:
@@ -108,7 +108,7 @@ state Main : Start {
         print("ehlo");
         myTransition("world");
     }
-    => myTransition(Main -> Print, str world){
+    <- myTransition(Main -> Print, str world){
         print.variable = world;
     }
 }
@@ -135,7 +135,7 @@ state Main : Start {
         print("ehlo");
         myTransition("world");
     }
-    => myTransition(Main -> Print, str world){
+    <- myTransition(Main -> Print, str world){
         print.variable = world;
     }
 }
@@ -165,7 +165,7 @@ state Main : Start {
         print("ehlo");
         myTransition("world");
     }
-    => myTransition(Main -> Print2, str world){
+    <- myTransition(Main -> Print2, str world){
         print.variable = world;
     }
 }
@@ -202,11 +202,11 @@ state Main : Start {
         myTransition("world");
     }
 
-    => myTransition(Main -> Print2, str world){
+    <- myTransition(Main -> Print2, str world){
         print.variable = world;
     }
 
-    => myTransition2(Main -> Print1) {}
+    <- myTransition2(Main -> Print1) {}
 
     state Print1 {
         entry {
@@ -230,7 +230,7 @@ state Print2 {
         print(variable);
         Return();
     }
-    => Return(Print2 -> Main){}
+    <- Return(Print2 -> Main){}
 }
 
 -------------------------------------------------------------------------------
@@ -240,3 +240,66 @@ $ bye
 ```
 Here the specific entry funcitons are necessary for `Main` as otherwise the
 program would loop through the originally defined `entry` function.
+
+Variables can be defined with static types inside a scope (not outside a state).
+The standard types are:
+
+|name | keyword | explanation|
+|--|--|--|
+|bool| bool| `true` or `false`
+|integer|int| 64 bit integer|
+|float | float | 64 bit IEEE 754 float|
+| string | str | char array without fixed length|
+|array | type[] | fixed size array of a single type|
+|reference | type * | pointer to type, not valid for states or functions|
+|bytes | bytes | 8 bits without integer functionality| 
+|struct | struct | a structure of predefined size with placeholders for other variables
+
+Evaluation of variables is not truthy, rather check the type against its empty
+version with ` var == [type]()`. Custom types may be defined:
+```
+...
+type myType {
+    (){
+        myType.value = bytes[2];
+        myType.value = 0;
+    }
+}
+...
+``` 
+Where the raw `()` function represents the initialization of the variable
+and `.value` the kind of data that is stored. This marks the only time where 
+a type is used as an rvalue. Keep in mind to set the value a value to the type
+after initialization to be able to compare against its empty version.
+
+To be able to use e.g. `print` for a custom type, define a `.print` function 
+which takes no arguments and returns nothing.
+
+The only constant values in the code are `true`, `false`, `null` (as the nullptr).
+
+A struct may be defined as 
+```
+...
+struct myStruct {
+    str hello;
+    str world;
+}
+...
+```
+And accessed via
+```
+...
+myStruct greeting;
+greeting.hello = "hello";
+geeting.world = "world";
+...
+```
+Or 
+```
+...
+myStruct greeting(
+    .hello = "hello";
+    .world = "world";
+)
+...
+```
