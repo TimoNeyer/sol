@@ -197,9 +197,7 @@ char Lexer::getClose(char start) {
 
 TokenType Lexer::isKeyword(std::string value) {
   TokenType previous = container.values.at(container.values.size() - 1).type;
-  if (previous == HASHTAG && value == "begin")
-    return BEGIN;
-  else if (value == "else")
+  if (value == "else")
     return ELSE;
   else if (value == "false")
     return FALSE;
@@ -218,15 +216,15 @@ TokenType Lexer::isKeyword(std::string value) {
   else if (value == "true")
     return TRUE;
   else if (value == "int") 
-    return INT
+    return INT;
   else if (value == "float")
-    return DOUBLE
+    return DOUBLE;
   else if (value == "state")
-    return STATE
+    return STATE;
   else if (value == "entry")
-    return ENTRY
+    return ENTRY;
   else if (value == "bytes")
-    return BYTES
+    return BYTES;
   return IDENTIFIER;
 }
 
@@ -350,8 +348,4 @@ void Lexer::parse() {
   }
   container.push(Token());
   container.values.shrink_to_fit();
-}
-Parser::~Parser(){
-    delete[] container;
-    stream.close();
 }

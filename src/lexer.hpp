@@ -23,16 +23,16 @@ enum TokenType {
 
   MODIFIERS,
 
-  AND,          // & -> get reference
-
-  MATH,         
-
-  STAR,         // * -> dereference
+  GETREF,          // & -> get reference
+  DEREF,         // * -> dereference
 
   ENDMODIFIERS,
 
+  MATH,         
+
   MINUS,        // operator minus
   PLUS,         // operator plus
+  STAR,         // operator multiply   
   SLASH,        // operator divide
   DOUBLE_SLASH, // operator integer division 
   DOUBLE_STAR,  // operator integer square
@@ -69,10 +69,10 @@ enum TokenType {
   PLUS_EQ,      // += assign the value itself plus the rvalue
   STAR_EQ,      // *= assign the value itself times the rvalue 
   SLASH_EQ,     // /= assign the value itself divided by the rvalue
-  PIPE_EQ       // |= assign the value itself logical or the rvalue
-  AND_EQ        // &= assign the value itself logical and the rvalue
-  CARET_EQ      // ^= assign the value itself logical xor the rvalue
-  TILDE_EQ      // ~= assign the value logical not the rvalue
+  PIPE_EQ,       // |= assign the value itself logical or the rvalue
+  AND_EQ,        // &= assign the value itself logical and the rvalue
+  CARET_EQ,      // ^= assign the value itself logical xor the rvalue
+  TILDE_EQ,      // ~= assign the value logical not the rvalue
   DOUBLE_PLUS,  // ++ increment the value either before use or after
   DOUBLE_MINUS, // -- decrement the value either before use or after
   ASSIGN,       // := assign compilation time value
@@ -83,7 +83,7 @@ enum TokenType {
 
   ARROWLEFT,    // <- define incoming transition
   ARROWRIGHT,   // -> define outgoing transition
-  DOT,          // .  access struct values
+  DOT,          // .  access type values or functions
   DOUBLE_COLON, // :: define to lvalue without beeing in the necessary block
 
   ENDACCESS,
@@ -181,5 +181,4 @@ public:
   TokenArray container;
   Lexer(std::ifstream *file);
   void parse();
-  ~Parser();
 };

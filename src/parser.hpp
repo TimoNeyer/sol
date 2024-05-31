@@ -1,11 +1,8 @@
 #pragma once
 
-#include <exception>
 #include <stack>
-#include <unordered_map>
-#include <format>
 
-#include "lexer.hpp"
+#include "./lexer.hpp"
 
 // define max lengths
 #define MAXFILESIZE 10000000
@@ -30,20 +27,19 @@ struct Node {
 };
 
 class Parser {
-  const Node *head;
+  Node *head;
 
-  void testExpression(TokenArray *value, size_t * index, TokenType delim);
+  void testExpression(TokenArray *value, size_t index, TokenType delim);
   void parseIf(TokenArray *value, size_t *index);
   void parseFn(TokenArray *value, size_t *index);
   void parseStruct(TokenArray *value);
-  void parseState(TokenArray * value, size_t * index);
-  void parseTransition(TokenArray * value, size_t * index);
-  void parseArray(TokenArray * value,size_t * index);
+  void parseState(TokenArray *value, size_t *index);
+  void parseTransition(TokenArray *value, size_t *index);
+  void parseArray(TokenArray *value, size_t *index);
 
 public:
-  std::stack<const Node *> backtrack;
+  std::stack<Node *> backtrack;
   void parse(TokenArray *value);
   Parser();
   ~Parser();
 };
-

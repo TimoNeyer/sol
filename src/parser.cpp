@@ -1,5 +1,8 @@
 #include "parser.hpp"
 #include "errors.hpp"
+#include "lexer.hpp"
+#include <cstddef>
+#include <fmt/format.h>
 
 Node::Node() {
   this->value = Token();
@@ -29,11 +32,12 @@ Node::~Node() {
 
 Parser::Parser() {
   this->head = new Node();
-  this->backtrack = std::stack<const Node *>();
+  this->backtrack = std::stack<Node *>();
   this->backtrack.push(this->head);
 }
 
-void Parser::testExpression(TokenArray *value, size_t *index, TokenType delim) {
+/*
+void : testExpression(TokenArray *value, size_t *index, TokenType delim) {
   Node *exp = new Node(value->at(*index), this->backtrack.top());
   exp->value.value = "";
   TokenArray buffer(4);
@@ -42,10 +46,11 @@ void Parser::testExpression(TokenArray *value, size_t *index, TokenType delim) {
   for (size_t i = *index; i < MAXEXP && value->at(i).type != delim;
        next = value->at(i++).type) {
     if (delim != SEMICOLON && value->at(*index + i).type == DOUBLE_PIPE) {
-      this->testExpression(value, &cindex, DOUBLE_PIPE);
-      this->testExpression(value, &cindex, delim);
+      this->testExpression(value, &i, DOUBLE_PIPE);
+      this->testExpression(value, &i, delim);
     }
     switch (value->at(*index).type) {
+    case PLUS:
     case MINUS:
       if (next != INT || next != FLOAT)
         throw BaseException(value->at(*index),
@@ -70,43 +75,95 @@ void Parser::testExpression(TokenArray *value, size_t *index, TokenType delim) {
       break;
     }
   }
+}*/
+
+void Parser::parseArray(TokenArray *value, size_t *index) {
+  TokenType current = value->at(++*index).type; 
+  TokenType next = value->at(++*index).type; 
+  while (next != EMPTY && next != RIGHT_BRACKET) {
+    if (current > ENDLITERALS && current < LITERALS) throw BaseException(value->at(*index), "unexpected value in array", *index);
+    if (next != COMMA) throw BaseException(value->at(*index), "Expected Comma as separator in array", *index);
+    current = next;
+    next = value->at(++*index).type;
+  }
+}
+
+void Parser::testExpression(TokenArray *value, size_t index, TokenType delim) {
+  Token current = value->at(index);
+  if (current.type == delim)
+    return;
+  switch (current.type) {
+  case LEFT_PAREN:
+    return this->testExpression(value, index, RIGHT_PAREN);
+  case SEMICOLON:
+  case ARROWRIGHT:
+  case ARROWLEFT:
+  case COLON:
+  case DOUBLE_COLON:
+    throw BaseException(current, "unexpected separator in expression", index);
+  case EMPTY:
+    throw BaseException(current, "Unexpected end of file", index);
+  default:
+    Token next = value->at(index + 1);
+    if (current.type > MATH && current.type < ENDMATH) {
+      if (next.type != INT && next.type != NUMBER && next.type != FLOAT &&
+          next.type != DOUBLE && next.type != IDENTIFIER)
+        throw BaseException(
+            next, "Unable to parse Expression, expected int, float or ident",
+            index);
+    } else if (current.type > LOGIC && current.type < ENDLOGIC) {
+      if (next.type != BOOL && next.type != IDENTIFIER && next.type != INT &&
+          next.type != NUMBER && next.type != FLOAT && next.type != DOUBLE)
+        throw BaseException(next,
+                            "Unable to parse Expression, expected bool, "
+                            "numeric value or Identifier",
+                            index);
+    } else if (current.type == IDENTIFIER && next.type == EQUAL && value->at(index +2).type == LEFT_BRACKET) {
+      index += 2;
+      this->parseArray(value, &index);
+    }
+    this->testExpression(value, ++index, delim);
+  }
 }
 
 void Parser::parseFn(TokenArray *value, size_t *index) {
-  if (value->size() <= *index + 7)
-    throw BaseException(value->at(*index), "function definition invalid",
-                        *index);
-  if (value->at(++*index).type != LESS ||
-      value->at(++*index).type < IDENTIFIER ||
-      value->at(++*index).type != GREATER) {
-    throw BaseException(value->at(*index - 3), "function signature has no type",
-                        *index);
-  }
   Node *fn = new Node(value->at(*index), this->backtrack.top());
   this->backtrack.push(fn);
-  Node *type = new Node(value->at(++*index), fn);
   Node *name = new Node(value->at((++*index)), fn);
-  *index += 2;
-  Node *params = new Node(value->at(*index), fn);
+  Node *params = new Node(
+      Token("", EXPRESSION, value->at(*index).line, value->at(*index).column),
+      fn);
+  this->testExpression(value, *index, RIGHT_PAREN);
   for (int i = 0; i < MAXARGS && i + *index < value->size() &&
                   value->at(++*index).type != RIGHT_PAREN;
        i++) {
     Node *arg = new Node(value->at(*index), params);
     params->push_node(arg);
   }
+  Node *content = new Node(Token(), fn);
+  this->backtrack.pop();
+  this->backtrack.push(content);
 }
 
 void Parser::parseIf(TokenArray *value, size_t *index) {
   Node *iif = new Node(value->at((*index)++), this->backtrack.top());
   Node *exp = new Node(value->at(*index), iif);
   this->backtrack.push(exp);
-  //  this->testExpression(value, index, RIGHT_PAREN);
+  Node *params = new Node(
+      Token("", EXPRESSION, value->at(*index).line, value->at(*index).column),
+      iif);
+  this->testExpression(value, *index, RIGHT_PAREN);
+  for (int i = 0; i < MAXARGS && i + *index < value->size() &&
+                  value->at(++*index).type != RIGHT_PAREN;
+       i++) {
+    Node *arg = new Node(value->at(*index), params);
+    params->push_node(arg);
+  }
   this->backtrack.pop();
   this->backtrack.push(iif);
 }
 
 void Parser::parse(TokenArray *lexerout) {
-  this->getPreprocess(lexerout);
   size_t *i = new size_t;
   for (*i = 0; *i < lexerout->size(); (*i)++) {
     switch (lexerout->at(*i).type) {
@@ -117,7 +174,13 @@ void Parser::parse(TokenArray *lexerout) {
       this->parseFn(lexerout, i);
       break;
     case STRUCT:
-
+      this->parseStruct(lexerout);
+      break;
+    case STATE:
+      this->parseState(lexerout, i);
+      break;
+    case TRANSITION:
+      this->parseTransition(lexerout, i);
       break;
     case RIGHT_BRACE:
       if (this->backtrack.size() == 0)
@@ -127,7 +190,16 @@ void Parser::parse(TokenArray *lexerout) {
       this->backtrack.pop();
       break;
     default:
-      // this->testExpression(lexerout, i, SEMICOLON);
+      this->testExpression(lexerout, *i, SEMICOLON);
+      Node *current = new Node(
+          Token("", EXPRESSION, lexerout->at(*i).line, lexerout->at(*i).column),
+          this->backtrack.top());
+      for (int h = 0; h < MAXARGS && *i < lexerout->size() &&
+                      lexerout->at((*i)++).type != RIGHT_PAREN;
+           h++) {
+        Node *arg = new Node(lexerout->at(*i), this->backtrack.top());
+        this->backtrack.top()->push_node(arg);
+      }
       break;
     }
   }
