@@ -225,7 +225,9 @@ TokenType Lexer::isKeyword(std::string value) {
     return ENTRY;
   else if (value == "bytes")
     return BYTES;
-  return IDENTIFIER;
+  else if (value == "new")
+    return NEW;
+  else return IDENTIFIER;
 }
 
 void Lexer::parseString(char start) {

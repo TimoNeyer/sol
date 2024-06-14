@@ -78,11 +78,15 @@ void : testExpression(TokenArray *value, size_t *index, TokenType delim) {
 }*/
 
 void Parser::parseArray(TokenArray *value, size_t *index) {
-  TokenType current = value->at(++*index).type; 
-  TokenType next = value->at(++*index).type; 
+  TokenType current = value->at(++*index).type;
+  TokenType next = value->at(++*index).type;
   while (next != EMPTY && next != RIGHT_BRACKET) {
-    if (current > ENDLITERALS && current < LITERALS) throw BaseException(value->at(*index), "unexpected value in array", *index);
-    if (next != COMMA) throw BaseException(value->at(*index), "Expected Comma as separator in array", *index);
+    if (current > ENDLITERALS && current < LITERALS)
+      throw BaseException(value->at(*index), "unexpected value in array",
+                          *index);
+    if (next != COMMA)
+      throw BaseException(value->at(*index),
+                          "Expected Comma as separator in array", *index);
     current = next;
     next = value->at(++*index).type;
   }
@@ -118,11 +122,15 @@ void Parser::testExpression(TokenArray *value, size_t index, TokenType delim) {
                             "Unable to parse Expression, expected bool, "
                             "numeric value or Identifier",
                             index);
-    } else if (current.type == IDENTIFIER && next.type == EQUAL && value->at(index +2).type == LEFT_BRACKET) {
+    } else if (current.type == IDENTIFIER && next.type == EQUAL &&
+               value->at(index + 2).type == LEFT_BRACKET) {
       index += 2;
       this->parseArray(value, &index);
+    } else if (next.type == EMPTY) {
+      throw BaseException(next, "Unexpected end of file", index);
+    } else {
+      this->testExpression(value, ++index, delim);
     }
-    this->testExpression(value, ++index, delim);
   }
 }
 
@@ -149,21 +157,29 @@ void Parser::parseIf(TokenArray *value, size_t *index) {
   Node *iif = new Node(value->at((*index)++), this->backtrack.top());
   Node *exp = new Node(value->at(*index), iif);
   this->backtrack.push(exp);
-  Node *params = new Node(
-      Token("", EXPRESSION, value->at(*index).line, value->at(*index).column),
-      iif);
   this->testExpression(value, *index, RIGHT_PAREN);
-  for (int i = 0; i < MAXARGS && i + *index < value->size() &&
-                  value->at(++*index).type != RIGHT_PAREN;
-       i++) {
-    Node *arg = new Node(value->at(*index), params);
-    params->push_node(arg);
+  unsigned int trace = 1;
+  for (int i = 0; i < MAXEXP && trace; i++) {
+    if (value->at((*index)++).type == RIGHT_PAREN)
+      trace--;
+    else if (value->at((*index)++).type == LEFT_PAREN)
+      trace++;
+    else
+      exp->push_node(new Node(value->at((*index)++), exp));
   }
   this->backtrack.pop();
   this->backtrack.push(iif);
 }
 
+void Parser::parseState(TokenArray *value, size_t *index) {
+  Node *state = new Node(value->at((*index)++), this->backtrack.top());
+  Node *name = new Node(value->at((*index)++), state);
+  this->backtrack.push(state);
+}
+
 void Parser::parse(TokenArray *lexerout) {
+  this->head = new Node();
+  this->backtrack.push(this->head);
   size_t *i = new size_t;
   for (*i = 0; *i < lexerout->size(); (*i)++) {
     switch (lexerout->at(*i).type) {
@@ -185,7 +201,7 @@ void Parser::parse(TokenArray *lexerout) {
     case RIGHT_BRACE:
       if (this->backtrack.size() == 0)
         throw BaseException(lexerout->at(*i),
-                            "call stack ambiguous, probably missing { or }",
+                            "call stack ambiguous, probably missing '{' or '}'",
                             *i);
       this->backtrack.pop();
       break;
@@ -203,4 +219,7 @@ void Parser::parse(TokenArray *lexerout) {
       break;
     }
   }
+  if (this->backtrack.top() != this->head)
+    throw BaseException(lexerout->at(*i),
+                        "Unexpected continuation, too many '{'?", *i);
 }

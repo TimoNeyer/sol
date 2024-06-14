@@ -76,6 +76,7 @@ enum TokenType {
   DOUBLE_PLUS,  // ++ increment the value either before use or after
   DOUBLE_MINUS, // -- decrement the value either before use or after
   ASSIGN,       // := assign compilation time value
+  NEW,
 
   ENDASSIGNMENT,
 

@@ -27,8 +27,6 @@ struct Node {
 };
 
 class Parser {
-  Node *head;
-
   void testExpression(TokenArray *value, size_t index, TokenType delim);
   void parseIf(TokenArray *value, size_t *index);
   void parseFn(TokenArray *value, size_t *index);
@@ -38,6 +36,7 @@ class Parser {
   void parseArray(TokenArray *value, size_t *index);
 
 public:
+  Node *head;
   std::stack<Node *> backtrack;
   void parse(TokenArray *value);
   Parser();
