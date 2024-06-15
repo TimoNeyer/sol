@@ -1,6 +1,12 @@
+#include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <exception>
+#include <format>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <stdlib.h>
@@ -11,7 +17,7 @@ Token::Token() {
   this->line = -1;
   this->column = -1;
   this->type = EMPTY;
-  this->value = std::string("");
+  this->value = std::string(":NaN:");
 }
 
 Token::Token(std::string str, TokenType type, int ln, int clmn) {
@@ -42,13 +48,7 @@ Token::Token(char vl, TokenType type, int ln, int clmn) {
   this->value = std::to_string(vl);
 }
 
-TokenArray::TokenArray(int minsize) { this->values.resize(minsize); };
-
-TokenArray::TokenArray() { this->values.resize(CONTAINERBUFF); }
-
-TokenArray::TokenArray(TokenArray &&other) { values.swap(other.values); }
-
-TokenArray::TokenArray(TokenArray &other) { values.swap(other.values); }
+TokenArray::TokenArray() {}
 
 TokenArray &TokenArray::operator=(const TokenArray &other) {
   this->values = other.values;
@@ -56,16 +56,13 @@ TokenArray &TokenArray::operator=(const TokenArray &other) {
 }
 
 bool TokenArray::push(Token token) {
-  if (values.capacity() == values.size()) {
-    values.resize(values.size() * 2);
-  }
   values.push_back(token);
   return true;
 }
+
 size_t TokenArray::size() { return values.size(); }
+
 Token TokenArray::at(size_t index) {
-  if (index > this->size())
-    throw std::runtime_error("Error");
   return this->values.at(index);
 }
 
@@ -80,8 +77,11 @@ void Lexer::parseNum(char value) {
   int iint = atoi(&value);
   int isFl = 0;
   if (stream.peek() == '0') {
-    std::cout << "Number starting with 0 detected at line " << line;
-    perror("ValueError");
+    std::string msg =
+        std::format("Error while parsing number\nline {}\nNumber starting \
+    with 0 is invalid",
+                    line);
+    throw std::runtime_error(msg);
   }
   while (stream.peek() != EOF) {
     switch (stream.peek()) {
@@ -105,8 +105,10 @@ void Lexer::parseNum(char value) {
         }
       } else if (stream.peek() == '.') {
         if (isFl) {
-          std::cout << "error in line " << line;
-          perror("more than one decimal point");
+          std::string msg = std::format("Error while parsing decimal number\n\
+          line {}\nmore than one decimal point\n",
+                                        line);
+          throw std::runtime_error(msg);
         }
         isFl = true;
         flt = iint;
@@ -196,7 +198,6 @@ char Lexer::getClose(char start) {
 }
 
 TokenType Lexer::isKeyword(std::string value) {
-  TokenType previous = container.values.at(container.values.size() - 1).type;
   if (value == "else")
     return ELSE;
   else if (value == "false")
@@ -215,7 +216,7 @@ TokenType Lexer::isKeyword(std::string value) {
     return STRUCT;
   else if (value == "true")
     return TRUE;
-  else if (value == "int") 
+  else if (value == "int")
     return INT;
   else if (value == "float")
     return DOUBLE;
@@ -227,25 +228,30 @@ TokenType Lexer::isKeyword(std::string value) {
     return BYTES;
   else if (value == "new")
     return NEW;
-  else return IDENTIFIER;
+  else if (value == "global")
+    return GLOBAL;
+  else if (value == "long")
+    return LONG;
+  else if (value == "signed")
+    return SIGNED;
+  else if (value == "unsigned")
+    return UNSIGNED;
+  else
+    return IDENTIFIER;
 }
 
 void Lexer::parseString(char start) {
-  std::string value;
-  while (stream.peek() != EOF) {
-    if (stream.peek() == start) {
-      stream.get();
-      switch (start) {
-      case '"':
-        container.push(Token(value, STRING, line, column));
-        return;
-      case '\'':
-        container.push(Token(value, CHAR, line, column));
-        return;
-      }
-    }
-    value.push_back(stream.get());
+  if (start == '\'') {
+    container.push(Token(start, CHAR, line, column));
   }
+  std::string value;
+  while (true) {
+    if (stream.peek() == '"') break;
+    else if (stream.peek() == EOF) throw std::runtime_error("String not terminated");
+    else value.push_back(stream.get());
+  }
+  container.push(Token(value, STRING, line, column));
+  stream.get();
 }
 void Lexer::parse() {
   while (stream.peek() != EOF) {
@@ -349,5 +355,7 @@ void Lexer::parse() {
     }
   }
   container.push(Token());
-  container.values.shrink_to_fit();
+  if (container.values.size() < container.values.capacity()) {
+    container.values.shrink_to_fit();
+  }
 }

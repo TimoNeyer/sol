@@ -1,6 +1,7 @@
 #include <cstdio>
 
 #include "parser.hpp"
+#include "lexer.hpp"
 
-void print_node(Node * node, int depth);
-void print_ast(Node * node);
+void print_ast(Parser * parser);
+void print_lexer(Lexer * lexer);

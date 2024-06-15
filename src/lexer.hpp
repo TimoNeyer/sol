@@ -1,6 +1,5 @@
 #pragma once
 #include <fstream>
-#include <iostream>
 #include <vector>
 
 #define CONTAINERBUFF 128
@@ -10,10 +9,10 @@ enum TokenType {
 
   LEFT_PAREN,   // (
   RIGHT_PAREN,  // )
-  LEFT_BRACE,   // [ 
-  RIGHT_BRACE,  // ]
-  LEFT_BRACKET, // {
-  RIGHT_BRACKET,// }
+  LEFT_BRACE,   // { 
+  RIGHT_BRACE,  // }
+  LEFT_BRACKET, // [
+  RIGHT_BRACKET,// ]
   SEMICOLON,    // ;
   LINECOMMENT,  // #
   BLOCKCOMMENT, // /*
@@ -25,6 +24,10 @@ enum TokenType {
 
   GETREF,          // & -> get reference
   DEREF,         // * -> dereference
+  GLOBAL,       // mark variable global
+  UNSIGNED,
+  SIGNED,
+  LONG,
 
   ENDMODIFIERS,
 
@@ -124,6 +127,7 @@ enum TokenType {
   TRUE,
 
   ENDKEYWORDS,
+
 
   LITERALS,
 

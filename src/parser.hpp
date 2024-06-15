@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <stack>
 
 #include "./lexer.hpp"
@@ -20,7 +21,7 @@ struct Node {
   const Node *parent;
   std::vector<Node *> subtree;
   Node();
-  Node(Token token, const Node *parent);
+  Node(Token token, Node *parent);
   Node(Node &other, Node *parent);
   void push_node(Node *node);
   ~Node();
@@ -30,15 +31,16 @@ class Parser {
   void testExpression(TokenArray *value, size_t index, TokenType delim);
   void parseIf(TokenArray *value, size_t *index);
   void parseFn(TokenArray *value, size_t *index);
-  void parseStruct(TokenArray *value);
+  void parseStruct(TokenArray *value, size_t *index);
   void parseState(TokenArray *value, size_t *index);
   void parseTransition(TokenArray *value, size_t *index);
   void parseArray(TokenArray *value, size_t *index);
+  void parseEntry(TokenArray *value, size_t *index);
 
 public:
-  Node *head;
+  const Node *head;
   std::stack<Node *> backtrack;
   void parse(TokenArray *value);
   Parser();
-  ~Parser();
+  ~Parser(){};
 };
