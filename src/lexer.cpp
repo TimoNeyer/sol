@@ -85,10 +85,6 @@ void Lexer::parseNum(char value) {
   }
   while (stream.peek() != EOF) {
     switch (stream.peek()) {
-    case '\r':
-    case '\v':
-    case '\t':
-    case '\n':
     case ' ':
       stream.get();
       continue;
@@ -230,12 +226,6 @@ TokenType Lexer::isKeyword(std::string value) {
     return NEW;
   else if (value == "global")
     return GLOBAL;
-  else if (value == "long")
-    return LONG;
-  else if (value == "signed")
-    return SIGNED;
-  else if (value == "unsigned")
-    return UNSIGNED;
   else
     return IDENTIFIER;
 }

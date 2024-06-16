@@ -85,8 +85,8 @@ enum TokenType {
 
   ACCESS,
 
-  ARROWLEFT,    // <- define incoming transition
-  ARROWRIGHT,   // -> define outgoing transition
+  ARROWLEFT,    // <- define outgoing transition
+  ARROWRIGHT,   // -> define incoming transition
   DOT,          // .  access type values or functions
   DOUBLE_COLON, // :: define to lvalue without beeing in the necessary block
 
