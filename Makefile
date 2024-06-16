@@ -34,7 +34,10 @@ default: makedir $(TARGET) $(TARGET_DEBUG)
 
 .PHONY: test
 test: $(TARGET_DEBUG)
-	$(foreach x, $(TESTING_DEBUG), $(TARGET_DEBUG) $(x))  
+	@for file in $(TESTING); do \
+		echo "Running $(COMMAND) with $$file"; \
+		$(TARGET_DEBUG) $$file; \
+	done
 
 
 
