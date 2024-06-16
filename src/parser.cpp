@@ -1,10 +1,8 @@
 #include "parser.hpp"
 #include "errors.hpp"
 #include "lexer.hpp"
-#include <cassert>
 #include <cstddef>
 #include <fmt/format.h>
-#include <stdexcept>
 
 Node::Node() {
   this->value = Token();

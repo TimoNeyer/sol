@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
     throw BaseException(Token(), "failed to open file");
   Lexer lexer(&file);
   lexer.parse();
-  print_lexer(&lexer);
+  //print_lexer(&lexer);
   Parser parser = Parser();
   parser.parse(&lexer.container);
   print_ast(&parser);

@@ -1,11 +1,14 @@
 #include "print_ast.hpp"
 #include "lexer.hpp"
+#include <cstdio>
 
 void print_node(Node *node, int depth) {
   for (int i = 0; i < depth; i++) {
     printf("| ");
   }
-  printf("-> type %d, value %s\n", node->value.type, node->value.value.c_str());
+  printf("-> type %d, value %s", node->value.type, node->value.value.c_str());
+  if (node->subtree.size() > 0) printf(" has subtree of size %lu", node->subtree.size());
+  printf("\n");
   for (Node *item : node->subtree) {
     print_node(item, depth + 1);
   }
