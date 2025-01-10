@@ -185,22 +185,13 @@ fn gen_ctx(t: Context_type, allocator: *std.mem.Allocator) Context {
     };
 }
 
-
 fn parse_type(self: *AST) !type_enum {
     var current = try self.get();
-    const state = enum {
-        start,
-        type,
-        @"struct",
-        array,
-        string
-    };
+    const state = enum { start, type, @"struct", array, string };
     switch (current.tag) {
         .identifier => {
-            switch (current.get_str(self.s_buffer)) {
-
-            }
-        }
+            switch (current.get_str(self.s_buffer)) {}
+        },
     }
     return .null;
 }
@@ -315,7 +306,6 @@ const AST = struct {
             }
         }
     }
-
 
     pub fn generate(self: *AST) !usize {
         while ((try self.seek()).tag != .eof) {

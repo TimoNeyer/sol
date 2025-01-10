@@ -1,5 +1,17 @@
 const std = @import("std");
 const io = std.io;
+const Allocator = std.mem.Allocator;
+
+fn allocFile(file: std.fs.File, allocator: Allocator) ![:0]u8 {
+    const size = (try file.stat()).size + 8;
+    const buffer = try allocator.allocSentinel(u8, size, 0);
+    if (try file.readAll(buffer) == size) {
+        return error.UnableToReadFile;
+    } else {
+        buffer[buffer.len - 1] = 0;
+        return buffer;
+    }
+}
 
 pub const Token = struct {
     tag: Tag,
@@ -15,31 +27,40 @@ pub const Token = struct {
     }
 
     pub const keywords = std.StaticStringMap(Tag).initComptime(.{
-        .{ "break", .keyword_break },
-        .{ "catch", .keyword_catch },
-        .{ "const", .keyword_const },
-        .{ "continue", .keyword_continue },
-        .{ "defer", .keyword_defer },
-        .{ "else", .keyword_else },
-        .{ "enum", .keyword_enum },
-        .{ "errdefer", .keyword_errdefer },
-        .{ "error", .keyword_error },
-        .{ "fn", .keyword_fn },
-        .{ "for", .keyword_for },
+        // conditional
         .{ "if", .keyword_if },
-        .{ "orelse", .keyword_orelse },
-        .{ "pub", .keyword_pub },
-        .{ "return", .keyword_return },
-        .{ "state", .keyword_state },
-        .{ "struct", .keyword_struct },
+        .{ "else", .keyword_else },
         .{ "switch", .keyword_switch },
-        .{ "try", .keyword_try },
-        .{ "union", .keyword_union },
-        .{ "var", .keyword_var },
-        .{ "volatile", .keyword_volatile },
+        // loops
+        .{ "for", .keyword_for },
         .{ "while", .keyword_while },
+        .{ "break", .keyword_break },
+        .{ "continue", .keyword_continue },
+        // error
+        .{ "catch", .keyword_catch },
+        .{ "error", .keyword_error },
+        .{ "orelse", .keyword_orelse },
+        .{ "try", .keyword_try },
+        // variables
+        .{ "const", .keyword_const },
+        .{ "var", .keyword_var },
+        // scopes
+        .{ "defer", .keyword_defer },
+        .{ "errdefer", .keyword_errdefer },
+        .{ "return", .keyword_return },
+        // types
+        .{ "enum", .keyword_enum },
+        .{ "fn", .keyword_fn },
+        .{ "pub", .keyword_pub },
+        .{ "struct", .keyword_struct },
+        .{ "union", .keyword_union },
+        .{ "volatile", .keyword_volatile },
+        // state
         .{ "entry", .keyword_entry },
-        .{ "interface", .keyword_interface },
+        .{ "state", .keyword_state },
+        .{ "machine", .keyword_machine },
+        .{ "initial", .keyword_initial },
+        .{ "final", .keyword_final },
     });
 
     pub fn getKeyword(bytes: []const u8) ?Tag {
@@ -51,13 +72,15 @@ pub const Token = struct {
         invalid_periodasterisks,
         identifier,
         keyword_entry,
-        keyword_interface,
+        keyword_machine,
+        keyword_initial,
+        keyword_final,
+        builtin,
         type,
         string_literal,
         multiline_string_literal_line,
         char_literal,
         eof,
-        builtin,
         bang,
         pipe,
         pipe_pipe,
@@ -141,6 +164,7 @@ pub const Token = struct {
         keyword_if,
         keyword_orelse,
         keyword_pub,
+        keyword_extern,
         keyword_return,
         keyword_state,
         keyword_struct,
@@ -160,7 +184,6 @@ pub const Token = struct {
                 .multiline_string_literal_line,
                 .char_literal,
                 .eof,
-                .builtin,
                 .number_literal,
                 .doc_comment,
                 .container_doc_comment,
@@ -247,6 +270,7 @@ pub const Token = struct {
                 .keyword_if => "if",
                 .keyword_orelse => "orelse",
                 .keyword_pub => "pub",
+                .keyword_extern => "extern",
                 .keyword_return => "return",
                 .keyword_state => "state",
                 .keyword_struct => "struct",
@@ -257,6 +281,10 @@ pub const Token = struct {
                 .keyword_var => "var",
                 .keyword_volatile => "volatile",
                 .keyword_while => "while",
+                .keyword_entry => "entry",
+                .keyword_machine => "machine",
+                .keyword_initial => "initial",
+                .keyword_final => "final",
             };
         }
 
@@ -267,7 +295,6 @@ pub const Token = struct {
                 .string_literal, .multiline_string_literal_line => "a string literal",
                 .char_literal => "a character literal",
                 .eof => "EOF",
-                .builtin => "a builtin function",
                 .number_literal => "a number literal",
                 .state => "a defined state",
                 .doc_comment, .container_doc_comment => "a document comment",
@@ -282,12 +309,18 @@ pub const Tokenizer = struct {
     index: usize,
 
     /// For debugging purposes.
-    pub fn dump(self: *Tokenizer, token: *const Token) void {
-        std.debug.print("{s} \"{s}\"\n", .{ @tagName(token.tag), self.buffer[token.loc.start..token.loc.end] });
+    pub fn dump(self: *Tokenizer, token: Token) void {
+        if (token.loc.end >= self.buffer.len) {
+            std.debug.print("{s} out of bounds\n", .{@tagName(token.tag)});
+        } else {
+            std.debug.print("{s} \"{s}\"\n", .{ @tagName(token.tag), self.buffer[token.loc.start..token.loc.end] });
+        }
     }
 
-    pub fn init(buffer: [:0]const u8) Tokenizer {
+    /// Initialize the Tokenizer with the read content
+    pub fn init(buffer: [:0]const u8, allocator: Allocator) !Tokenizer {
         // Skip the UTF-8 BOM if present.
+        _ = allocator;
         return .{
             .buffer = buffer,
             .index = if (std.mem.startsWith(u8, buffer, "\xEF\xBB\xBF")) 3 else 0,
@@ -343,9 +376,24 @@ pub const Tokenizer = struct {
         invalid,
     };
 
-    /// After this returns invalid, it will reset on the next newline, returning tokens starting from there.
+    pub fn generate(self: *Tokenizer, allocator: Allocator) ![]Token {
+        var buffer = try allocator.alloc(Token, @max(self.buffer.len >> 4, 128));
+        var used: usize = 0;
+        while (true) : (used += 1) {
+            if (buffer.len == used) {
+                buffer = try allocator.realloc(buffer, buffer.len * 2);
+            }
+            const token = self.next().?;
+            buffer[used] = token;
+            if (token.tag == .eof) break;
+        }
+        return try allocator.realloc(buffer, used + 1);
+    }
+
+    /// After this returns invalid, it will reset on the next newline,
+    /// returning tokens starting from there.
     /// An eof token will always be returned at the end.
-    pub fn next(self: *Tokenizer) Token {
+    pub fn next(self: *Tokenizer) ?Token {
         var state: State = .start;
         var result: Token = .{
             .tag = undefined,
@@ -359,7 +407,7 @@ pub const Tokenizer = struct {
             switch (state) {
                 .start => switch (c) {
                     0 => {
-                        if (self.index == self.buffer.len) return .{
+                        if (self.index == self.buffer.len) result = .{
                             .tag = .eof,
                             .loc = .{
                                 .start = self.index,
@@ -367,6 +415,7 @@ pub const Tokenizer = struct {
                             },
                         };
                         state = .invalid;
+                        return result;
                     },
                     ' ', '\n', '\t', '\r' => {
                         result.loc.start = self.index + 1;
@@ -455,7 +504,6 @@ pub const Tokenizer = struct {
                     },
                     '\\' => {
                         state = .backslash;
-                        result.tag = .multiline_string_literal_line;
                     },
                     '{' => {
                         result.tag = .l_brace;
@@ -522,22 +570,24 @@ pub const Tokenizer = struct {
                     else => continue,
                 },
 
-                .saw_at_sign => switch (c) {
-                    0, '\n' => {
-                        result.tag = .invalid;
-                        break;
-                    },
-                    '"' => {
-                        result.tag = .identifier;
-                        state = .string_literal;
-                    },
-                    'a'...'z', 'A'...'Z', '_' => {
-                        state = .builtin;
-                        result.tag = .builtin;
-                    },
-                    else => {
-                        state = .invalid;
-                    },
+                .saw_at_sign => {
+                    switch (c) {
+                        0, '\n' => {
+                            result.tag = .invalid;
+                            break;
+                        },
+                        '"' => {
+                            result.tag = .identifier;
+                            state = .string_literal;
+                        },
+                        'a'...'z', 'A'...'Z', '_' => {
+                            result.tag = .builtin;
+                            state = .builtin;
+                        },
+                        else => {
+                            state = .invalid;
+                        },
+                    }
                 },
 
                 .ampersand => switch (c) {
@@ -698,9 +748,6 @@ pub const Tokenizer = struct {
                         result.tag = .invalid;
                         break;
                     },
-                    '\\' => {
-                        state = .multiline_string_literal_line;
-                    },
                     '\n' => {
                         result.tag = .invalid;
                         break;
@@ -719,7 +766,8 @@ pub const Tokenizer = struct {
                         break;
                     },
                     '\n' => {
-                        result.tag = .invalid;
+                        state = .multiline_string_literal_line;
+                        self.index += 1;
                         break;
                     },
                     '\\' => {
@@ -1048,13 +1096,14 @@ pub const Tokenizer = struct {
                             state = .invalid;
                             continue;
                         }
-                        return .{
+                        result = .{
                             .tag = .eof,
                             .loc = .{
                                 .start = self.index,
                                 .end = self.index,
                             },
                         };
+                        return result;
                     },
                     '/' => {
                         state = .doc_comment_start;
@@ -1108,13 +1157,14 @@ pub const Tokenizer = struct {
                             state = .invalid;
                             continue;
                         }
-                        return .{
+                        result = .{
                             .tag = .eof,
                             .loc = .{
                                 .start = self.index,
                                 .end = self.index,
                             },
                         };
+                        return result;
                     },
                     '\r' => {
                         state = .expect_newline;
@@ -1190,144 +1240,131 @@ pub const Tokenizer = struct {
     }
 };
 
+const debug_allocator = std.testing.allocator;
+
 test "tokenizer" {
-    var tokenizer = Tokenizer.init("state main { entry {print(\"hello world\");}}");
-    const types = [_]Token.Tag{ .keyword_state, .identifier, .l_brace, .identifier, .l_brace, .identifier, .l_paren, .string_literal, .r_paren, .semicolon, .r_brace, .r_brace };
-    var i: usize = 0;
-    while (i < tokenizer.buffer.len) : (i += 1) {
-        const t = tokenizer.next();
-        if (t.tag == .eof) break else try std.testing.expect(t.tag == types[i]);
+    var tokenizer = try Tokenizer.init("state main { entry {print(\"hello world\");}}", debug_allocator);
+    const types = [_]Token.Tag{ .keyword_state, .identifier, .l_brace, .keyword_entry, .l_brace, .identifier, .l_paren, .string_literal, .r_paren, .semicolon, .r_brace, .r_brace, .eof };
+    const tokenArr = try tokenizer.generate(debug_allocator);
+    defer debug_allocator.free(tokenArr);
+    for (tokenArr, types) |a, b| {
+        try std.testing.expect(a.tag == b);
     }
 }
 
 test "basic-expressions1" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/basic-expressions1.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "hello-world" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/hello-world.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "import" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/import.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "inc-dec-operators" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/inc-dec-operatos.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "simple-function1" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/simple-function1.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "simple-function2" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/simple-function2.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "simple-function3" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/simple-function3.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "simple-if" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/simple-if.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "simple-transition" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/simple-transition.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "state-global-param" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/state-global-param.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "state-param" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/state-param.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }
 
 test "two-states" {
-    const buffer: [:0]u8 = undefined;
     const f = try std.fs.cwd().openFile("tests/two-states.sl", .{});
     defer f.close();
-    _ = try f.readAll(buffer);
-    var tokenizer = Tokenizer.init(buffer);
-    while (true) {
-        if (tokenizer.next().tag == .eof) break;
-    }
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
+}
+
+test "machine" {
+    const f = try std.fs.cwd().openFile("tests/basic-machine.sl", .{});
+    defer f.close();
+    const buffer: [:0]const u8 = try allocFile(f, debug_allocator);
+    defer debug_allocator.free(buffer);
+    var tokenizer = try Tokenizer.init(buffer, debug_allocator);
+    debug_allocator.free(try tokenizer.generate(debug_allocator));
 }

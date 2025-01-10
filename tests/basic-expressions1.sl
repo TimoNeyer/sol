@@ -1,4 +1,4 @@
-state Main {
+initial final state Main {
   entry {
     int param0 = 1;
     int param1 = param0 + 1;
