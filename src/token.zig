@@ -52,9 +52,10 @@ pub const Token = struct {
         .{ "enum", .keyword_enum },
         .{ "fn", .keyword_fn },
         .{ "pub", .keyword_pub },
+        .{ "extern", .keyword_extern },
+        .{ "mut", .keyword_mut },
         .{ "struct", .keyword_struct },
         .{ "union", .keyword_union },
-        .{ "volatile", .keyword_volatile },
         // state
         .{ "entry", .keyword_entry },
         .{ "state", .keyword_state },
@@ -160,6 +161,7 @@ pub const Token = struct {
         keyword_errdefer,
         keyword_error,
         keyword_fn,
+        keyword_mut,
         keyword_for,
         keyword_if,
         keyword_orelse,
@@ -173,7 +175,6 @@ pub const Token = struct {
         keyword_try,
         keyword_union,
         keyword_var,
-        keyword_volatile,
         keyword_while,
 
         pub fn lexeme(tag: Tag) ?[]const u8 {
@@ -279,7 +280,6 @@ pub const Token = struct {
                 .keyword_try => "try",
                 .keyword_union => "union",
                 .keyword_var => "var",
-                .keyword_volatile => "volatile",
                 .keyword_while => "while",
                 .keyword_entry => "entry",
                 .keyword_machine => "machine",

@@ -4,4 +4,5 @@
 - 'machine' keyword for defining additional state machines for runtime
 - 'initial' and 'final' as keywords for entry and exit (may be used at the same time)
 - use namespace include functionality for builtins
-- allow easy custom types with operators, easy to implement (use 'define')
+- use try to throw error on optional
+- AST parser with stack of .{ scope, restrictions, extensions}
